@@ -515,6 +515,7 @@ class EncuestaBot:
         """
         email = str(row['CORREO'])
         nombre = str(row['NOMBRE_COMPLETO'])
+        inicio_registro = time.perf_counter()
         
         logger.info(f"\n{'='*50}")
         logger.info(f"📋 Procesando registro {idx + 1}")
@@ -525,6 +526,8 @@ class EncuestaBot:
         # Verificar si ya fue procesado
         if email in self.processed_emails:
             logger.info(f"⏭️ Registro ya procesado anteriormente: {email}")
+            tiempo_total = time.perf_counter() - inicio_registro
+            logger.info(f"⏱️ Registro {idx + 1} omitido en {tiempo_total:.2f} segundos")
             return True
         
         try:
@@ -565,11 +568,16 @@ class EncuestaBot:
                 self._mark_as_processed(email, nombre, "FALLIDO")
                 logger.warning(f"⚠️ Registro {idx + 1} procesado con advertencias")
             
+            tiempo_total = time.perf_counter() - inicio_registro
+            logger.info(f"⏱️ Registro {idx + 1} terminado en {tiempo_total:.2f} segundos")
+            
             return exito
             
         except Exception as e:
             logger.error(f"❌ Error procesando registro {idx + 1}: {e}", exc_info=True)
             self._mark_as_processed(email, nombre, f"ERROR: {str(e)[:50]}")
+            tiempo_total = time.perf_counter() - inicio_registro
+            logger.info(f"⏱️ Registro {idx + 1} terminó con error en {tiempo_total:.2f} segundos")
             return False
     
     def ejecutar(self):

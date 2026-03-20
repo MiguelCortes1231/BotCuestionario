@@ -587,7 +587,7 @@ class EncuestaBot:
         try:
             # Leer CSV
             logger.info(f"📖 Leyendo archivo CSV: {self.csv_path}")
-            df = pd.read_csv(self.csv_path, encoding='utf-8')
+            df = pd.read_csv(self.csv_path, encoding='cp1252')
             logger.info(f"📊 Total de registros: {len(df)}")
             
             # Validar columnas necesarias

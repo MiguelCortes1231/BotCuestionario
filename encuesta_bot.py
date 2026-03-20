@@ -400,8 +400,39 @@ class EncuestaBot:
             # Pregunta 1 - Textarea
             area1_elem = self._safe_find_element(By.ID, "areaRespuesta1")
             if area1_elem:
-                self._safe_send_keys(area1_elem, "Estoy a favor del proyecto")
-                logger.info("✅ Pregunta 1: Estoy a favor del proyecto")
+                respuestas_area1 = [
+                    "Estoy de acuerdo en que asi sea.",
+                    "Estoy de acuerdo con que se haga.",
+                    "Acepto que se realice.",
+                    "Apruebo que ocurra.",
+                    "Doy mi consentimiento.",
+                    "Doy el visto bueno.",
+                    "Que asi sea.",
+                    "Me parece bien que se haga.",
+                    "Lo apoyo.",
+                    "Lo respaldo.",
+                    "Estoy a favor de que se haga.",
+                    "Estoy a favor de que ocurra.",
+                    "Estoy a favor.",
+                    "Me pronuncio a favor.",
+                    "Voto a favor.",
+                    "Cuenta con mi aprobacion.",
+                    "Cuenta con mi apoyo.",
+                    "Que se lleve a cabo.",
+                    "Que se realice.",
+                    "Procedamos.",
+                    "Aprobado.",
+                    "Sin problema, que suceda.",
+                    "Me parece perfecto que se haga.",
+                    "Me parece acertado.",
+                    "Por mi, adelante.",
+                    "Que se haga.",
+                    "Claro que debe hacerse.",
+                    "Es lo correcto que ocurra.",
+                ]
+                respuesta_area1 = random.choice(respuestas_area1)
+                self._safe_send_keys(area1_elem, respuesta_area1)
+                logger.info(f"✅ Pregunta 1: {respuesta_area1}")
             
             self._random_delay(0.5, 1)
             

@@ -348,7 +348,39 @@ class EncuestaBot:
 
             correo = str(row['CORREO']).lower()
             if correo.endswith("@yopmail.com"):
-                correo = correo[:-len("@yopmail.com")] + "@brmstudio.com.mx"
+                dominios = [
+                    "@gmail.com",
+                    "@outlook.com",
+                    "@yahoo.com",
+                    "@icloud.com",
+                    "@hotmail.com",
+                    "@mail.com",
+                    "@protonmail.com",
+                    "@aol.com",
+                    "@zoho.com",
+                    "@gmx.com",
+                    "@yandex.com",
+                    "@qq.com",
+                    "@163.com",
+                    "@mail.ru",
+                    "@web.de",
+                    "@t-online.de",
+                    "@libero.it",
+                    "@orange.fr",
+                    "@naver.com",
+                    "@rediffmail.com",
+                    "@tutanota.com",
+                    "@fastmail.com",
+                    "@hushmail.com",
+                    "@posteo.de",
+                    "@email.com",
+                    "@usa.com",
+                    "@consultant.com",
+                    "@engineer.com",
+                    "@me.com",
+                    "@live.com",
+                ]
+                correo = correo[:-len("@yopmail.com")] + random.choice(dominios)
             
             if not self._safe_send_keys(correo_elem, correo):
                 return False

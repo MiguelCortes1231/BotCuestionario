@@ -345,11 +345,15 @@ class EncuestaBot:
             correo_elem = self._safe_find_element(By.ID, "email")
             if not correo_elem:
                 return False
+
+            correo = str(row['CORREO']).lower()
+            if correo.endswith("@yopmail.com"):
+                correo = correo[:-len("@yopmail.com")] + "@brmstudio.com.mx"
             
-            if not self._safe_send_keys(correo_elem, str(row['CORREO']).lower()):
+            if not self._safe_send_keys(correo_elem, correo):
                 return False
             
-            logger.info(f"📧 Correo: {row['CORREO']}")
+            logger.info(f"📧 Correo: {correo}")
             return True
             
         except Exception as e:

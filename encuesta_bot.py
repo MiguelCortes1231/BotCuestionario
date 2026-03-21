@@ -480,14 +480,31 @@ class EncuestaBot:
         try:
             logger.info("🔍 Buscando captcha...")
             
-            # Encontrar elemento de imagen del captcha
-            captcha_img = self._safe_find_element(By.ID, "captcha-image", timeout=10)
+            # El captcha cambió: ahora viene como <img alt="captcha" src="data:image/...">
+            captcha_img = None
+            captcha_selectors = [
+                (By.ID, "captcha-image"),
+                (By.CSS_SELECTOR, "img[alt='captcha']"),
+                (By.CSS_SELECTOR, "img[src^='data:image/']"),
+                (By.XPATH, "//input[@name='captcha[input]']/preceding::img[1]"),
+            ]
+            
+            for by, value in captcha_selectors:
+                captcha_img = self._safe_find_element(by, value, timeout=3)
+                if captcha_img:
+                    logger.info(f"✅ Imagen captcha encontrada con selector: {by}={value}")
+                    break
+            
             if not captcha_img:
                 logger.error("❌ No se encontró la imagen del captcha")
                 return None
             
-            # Obtener el ID oculto del captcha
-            captcha_hidden = self._safe_find_element(By.ID, "captcha-hidden", timeout=5)
+            # Obtener el ID oculto del captcha con fallback al nuevo markup
+            captcha_hidden = (
+                self._safe_find_element(By.ID, "captcha-hidden", timeout=3) or
+                self._safe_find_element(By.NAME, "captcha[id]", timeout=3) or
+                self._safe_find_element(By.CSS_SELECTOR, "input[type='hidden'][name='captcha[id]']", timeout=3)
+            )
             captcha_id = captcha_hidden.get_attribute('value') if captcha_hidden else "desconocido"
             logger.info(f"🆔 Captcha ID: {captcha_id}")
             

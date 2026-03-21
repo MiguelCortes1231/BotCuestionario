@@ -84,8 +84,6 @@ class CaptchaSolver:
                 logger.error("❌ No se pudo obtener src de la imagen")
                 return None
             
-            logger.info(f"📸 URL del captcha: {img_src}")
-            
             # Crear directorio temporal si no existe
             temp_dir = Path("temp_captcha")
             temp_dir.mkdir(exist_ok=True)
@@ -93,18 +91,29 @@ class CaptchaSolver:
             # Generar nombre único
             timestamp = int(time.time())
             img_path = temp_dir / f"captcha_{timestamp}.png"
-            
-            # Descargar imagen
-            headers = {
-                'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
-            }
-            
-            response = requests.get(img_src, headers=headers, timeout=30)
-            response.raise_for_status()
+
+            if img_src.startswith("data:image/"):
+                logger.info("📸 Captcha embebido detectado en formato base64")
+                try:
+                    _, encoded_image = img_src.split(",", 1)
+                    image_bytes = base64.b64decode(encoded_image)
+                except Exception as e:
+                    logger.error(f"❌ No se pudo decodificar el captcha en base64: {e}")
+                    return None
+            else:
+                logger.info(f"📸 URL del captcha: {img_src}")
+                
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+                }
+                
+                response = requests.get(img_src, headers=headers, timeout=30)
+                response.raise_for_status()
+                image_bytes = response.content
             
             # Guardar imagen
             with open(img_path, 'wb') as f:
-                f.write(response.content)
+                f.write(image_bytes)
             
             logger.info(f"✅ Captcha descargado: {img_path}")
             return str(img_path)

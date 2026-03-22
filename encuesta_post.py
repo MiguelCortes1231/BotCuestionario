@@ -58,9 +58,14 @@ class CaptchaSession:
 
 class EncuestaPostBot(EncuestasEspecialesBot):
     def __init__(self, csv_path: str, headless: bool = False):
-        self.responses_dir = Path("respuesta_post")
-        self.curls_dir = Path("curls")
-        self.post_validated_dir = Path("post_validados")
+        self.initial_csv_path = Path(csv_path)
+        self.csv_run_name = self.initial_csv_path.stem
+        self.responses_root_dir = Path("respuesta_post")
+        self.curls_root_dir = Path("curls")
+        self.post_validated_root_dir = Path("post_validados")
+        self.responses_dir = self.responses_root_dir / self.csv_run_name
+        self.curls_dir = self.curls_root_dir / self.csv_run_name
+        self.post_validated_dir = self.post_validated_root_dir / self.csv_run_name
         super().__init__(csv_path, headless=headless)
         self.post_url = self._build_post_url()
         self.current_captcha: Optional[CaptchaSession] = None
@@ -88,6 +93,9 @@ class EncuestaPostBot(EncuestasEspecialesBot):
             "bd_especiales",
             "errores",
             "validado_especiales",
+            str(self.responses_root_dir),
+            str(self.curls_root_dir),
+            str(self.post_validated_root_dir),
             str(self.responses_dir),
             str(self.curls_dir),
             str(self.post_validated_dir),

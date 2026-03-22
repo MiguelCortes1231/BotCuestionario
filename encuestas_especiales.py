@@ -12,6 +12,7 @@ from typing import List, Optional, Tuple
 
 import dotenv
 import pandas as pd
+import requests
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.ui import WebDriverWait
 
@@ -252,6 +253,8 @@ class EncuestasEspecialesBot(EncuestaBot):
             return True, "YA_VALIDADO"
 
         try:
+            self.esperar_url_disponible()
+
             if not self.navegar_a_encuesta():
                 return False, "NO_SE_PUDO_ABRIR_ENCUESTA"
 
@@ -289,6 +292,58 @@ class EncuestasEspecialesBot(EncuestaBot):
             tiempo_total = time.perf_counter() - inicio_registro
             logger.info(f"⏱️ Registro especial {idx + 1} terminó con error en {tiempo_total:.2f} segundos")
             return False, f"ERROR_EXCEPCION: {str(e)[:120]}"
+
+    def esperar_url_disponible(self):
+        espera_segundos = int(os.getenv("SPECIAL_URL_RETRY_SECONDS", "10"))
+        espera_bloqueo_html_segundos = int(os.getenv("SPECIAL_URL_FORBIDDEN_RETRY_SECONDS", "20"))
+        intento = 1
+
+        while True:
+            try:
+                logger.info(f"🔎 Verificando disponibilidad de URL_ENCUESTA, intento #{intento}")
+                response = requests.get(
+                    self.base_url,
+                    timeout=int(os.getenv("SPECIAL_URL_STATUS_TIMEOUT", "20")),
+                    allow_redirects=True,
+                )
+
+                if response.status_code == 200:
+                    if self._response_looks_forbidden(response.text):
+                        logger.warning(
+                            "⏸️ URL_ENCUESTA respondió 200 pero renderizó una página de bloqueo/forbidden. "
+                            f"Registro en pausa, reintentando en {espera_bloqueo_html_segundos} segundos..."
+                        )
+                        time.sleep(espera_bloqueo_html_segundos)
+                        intento += 1
+                        continue
+
+                    logger.info("✅ URL_ENCUESTA disponible con estatus 200 y contenido válido")
+                    return
+
+                logger.warning(
+                    f"⏸️ URL_ENCUESTA respondió {response.status_code}. "
+                    f"Registro en pausa, reintentando en {espera_segundos} segundos..."
+                )
+            except requests.RequestException as e:
+                logger.warning(
+                    f"⏸️ No se pudo consultar URL_ENCUESTA ({e}). "
+                    f"Registro en pausa, reintentando en {espera_segundos} segundos..."
+                )
+
+            time.sleep(espera_segundos)
+            intento += 1
+
+    def _response_looks_forbidden(self, html: str) -> bool:
+        normalized = " ".join((html or "").lower().split())
+        forbidden_markers = [
+            "<title>403 forbidden</title>",
+            "<h1>forbidden</h1>",
+            "you don't have permission to access",
+            "you do not have permission to access",
+            "403 forbidden",
+            "access denied",
+        ]
+        return any(marker in normalized for marker in forbidden_markers)
 
     def ejecutar(self) -> bool:
         try:

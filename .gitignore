@@ -35,6 +35,9 @@ downloads/
 temp_captcha/
 txt_verificados/
 bd/
+respuesta_post/
+curls/
+post_validados/
 
 # =========================
 # Editors / OS

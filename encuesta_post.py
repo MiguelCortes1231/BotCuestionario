@@ -3,6 +3,7 @@
 
 import os
 import random
+import re
 import sys
 import time
 from dataclasses import dataclass
@@ -57,9 +58,18 @@ class CaptchaSession:
 
 class EncuestaPostBot(EncuestasEspecialesBot):
     def __init__(self, csv_path: str, headless: bool = False):
+        self.responses_dir = Path("respuesta_post")
+        self.curls_dir = Path("curls")
+        self.post_validated_dir = Path("post_validados")
         super().__init__(csv_path, headless=headless)
         self.post_url = self._build_post_url()
         self.current_captcha: Optional[CaptchaSession] = None
+        self.processed_file = self.post_validated_dir / "post_validados.txt"
+        self.processed_emails = set()
+        self._load_processed()
+        logger.info(f"📨 Respuestas POST: {self.responses_dir}")
+        logger.info(f"🧾 CURLs POST: {self.curls_dir}")
+        logger.info(f"✅ Validados POST: {self.processed_file}")
 
     def _build_post_url(self) -> str:
         base = self.base_url.split("/llenado/")[0].rstrip("/")
@@ -69,6 +79,22 @@ class EncuestaPostBot(EncuestasEspecialesBot):
         delay = random.uniform(min_seconds, max_seconds)
         logger.info(f"⏳ Esperando {delay:.2f} segundos...")
         time.sleep(delay)
+
+    def _setup_directories(self):
+        directories = [
+            "downloads",
+            "logs",
+            "temp_captcha",
+            "bd_especiales",
+            "errores",
+            "validado_especiales",
+            str(self.responses_dir),
+            str(self.curls_dir),
+            str(self.post_validated_dir),
+        ]
+
+        for dir_name in directories:
+            Path(dir_name).mkdir(parents=True, exist_ok=True)
 
     def _random_email_from_row(self, row: pd.Series) -> str:
         correo = str(row["CORREO"]).strip().lower()
@@ -152,6 +178,59 @@ class EncuestaPostBot(EncuestasEspecialesBot):
         if not text or text.lower() == "nan":
             return default
         return text.upper()
+
+    def _status_suffix(self, ok: bool) -> str:
+        return "succes" if ok else "error"
+
+    def _record_slug(self, row: pd.Series) -> str:
+        correo = str(row["CORREO"]).strip().lower()
+        local_part = correo.split("@", 1)[0]
+        local_part = local_part.replace("yopmail", "")
+        local_part = re.sub(r"[^a-z0-9._-]+", "_", local_part)
+        return local_part.strip("._-") or "registro"
+
+    def _artifact_path(self, directory: Path, row: pd.Series, ok: bool, extension: str) -> Path:
+        filename = f"{self._record_slug(row)}-{self._status_suffix(ok)}.{extension}"
+        return directory / filename
+
+    def _save_response_artifact(self, row: pd.Series, ok: bool, html: str):
+        path = self._artifact_path(self.responses_dir, row, ok, "htm")
+        path.write_text(html or "", encoding="utf-8", errors="ignore")
+        logger.info(f"💾 Respuesta guardada en {path}")
+
+    def _build_curl_command(self, payload: Dict[str, str], captcha_session: CaptchaSession) -> str:
+        curl_parts = [
+            f"curl '{self.post_url}'",
+            "  -H 'Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7'",
+            "  -H 'Accept-Language: es-US,es-419;q=0.9,es;q=0.8'",
+            "  -H 'Cache-Control: max-age=0'",
+            "  -H 'Connection: keep-alive'",
+            f"  -H 'Origin: {self.post_url.split('/llenado/')[0]}'",
+            f"  -H 'Referer: {captcha_session.referer}'",
+            "  -H 'Upgrade-Insecure-Requests: 1'",
+            (
+                "  -H 'User-Agent: "
+                + os.getenv(
+                    "USER_AGENT",
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/146.0.0.0 Safari/537.36",
+                )
+                + "'"
+            ),
+            f"  -b 'PHPSESSID={captcha_session.php_sessid}'",
+        ]
+
+        for key, value in payload.items():
+            curl_parts.append(f"  -F \"{key}={value}\"")
+
+        curl_parts.append("  -F \"archivoAdj1=@;type=application/octet-stream\"")
+        curl_parts.append("  -F \"archivoAdj2=@;type=application/octet-stream\"")
+        return " \\\n".join(curl_parts)
+
+    def _save_curl_artifact(self, row: pd.Series, ok: bool, curl_command: str):
+        path = self._artifact_path(self.curls_dir, row, ok, "txt")
+        path.write_text(curl_command + "\n", encoding="utf-8")
+        logger.info(f"💾 CURL guardado en {path}")
 
     def _get_cookie_value(self, name: str) -> str:
         for cookie in self.driver.get_cookies():
@@ -295,7 +374,7 @@ class EncuestaPostBot(EncuestasEspecialesBot):
             "btnEnviar": "Enviar",
         }
 
-    def _post_formulario(self, payload: Dict[str, str], captcha_session: CaptchaSession) -> Tuple[bool, str, str]:
+    def _post_formulario(self, payload: Dict[str, str], captcha_session: CaptchaSession) -> Tuple[bool, str, str, str]:
         headers = {
             "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7",
             "Accept-Language": "es-US,es-419;q=0.9,es;q=0.8",
@@ -315,6 +394,7 @@ class EncuestaPostBot(EncuestasEspecialesBot):
             ("archivoAdj1", ("", b"", "application/octet-stream")),
             ("archivoAdj2", ("", b"", "application/octet-stream")),
         ]
+        curl_command = self._build_curl_command(payload, captcha_session)
 
         with requests.Session() as session:
             session.cookies.set("PHPSESSID", captcha_session.php_sessid)
@@ -331,15 +411,15 @@ class EncuestaPostBot(EncuestasEspecialesBot):
         normalized = " ".join(html.lower().split())
 
         if SUCCESS_MARKER in normalized:
-            return True, "EXITOSO", html
+            return True, "EXITOSO", html, curl_command
 
         if any(marker in normalized for marker in CAPTCHA_INVALID_MARKERS):
-            return False, "CAPTCHA_INVALIDO", html
+            return False, "CAPTCHA_INVALIDO", html, curl_command
 
         if any(marker in normalized for marker in GENERIC_ERROR_MARKERS):
-            return False, "ERROR_PAGINA", html
+            return False, "ERROR_PAGINA", html, curl_command
 
-        return False, "RESPUESTA_NO_EXITOSA", html
+        return False, "RESPUESTA_NO_EXITOSA", html, curl_command
 
     def procesar_registro(self, row: pd.Series, idx: int) -> Tuple[bool, str]:
         email_base = str(row["CORREO"]).strip()
@@ -377,7 +457,11 @@ class EncuestaPostBot(EncuestasEspecialesBot):
                     f"y {captcha_session.successful_posts} éxitos acumulados"
                 )
 
-                ok, motivo, html = self._post_formulario(payload, captcha_session)
+                ok, motivo, html, curl_command = self._post_formulario(payload, captcha_session)
+                self._save_response_artifact(row, ok, html)
+                self._save_curl_artifact(row, ok, curl_command)
+                resumen_html = " ".join((html or "").split())[:500]
+                logger.info(f"📥 Respuesta POST registro {idx + 1}: {resumen_html}")
                 if ok:
                     captcha_session.successful_posts += 1
                     self._mark_as_processed(email_base, nombre, motivo)
@@ -390,7 +474,6 @@ class EncuestaPostBot(EncuestasEspecialesBot):
                     logger.info(f"⏱️ Registro POST {idx + 1} terminado en {tiempo_total:.2f} segundos")
                     return True, motivo
 
-                resumen_html = " ".join((html or "").split())[:250]
                 logger.warning(
                     f"⚠️ Registro {idx + 1} falló en POST. Motivo: {motivo}. "
                     f"Respuesta resumida: {resumen_html}"
